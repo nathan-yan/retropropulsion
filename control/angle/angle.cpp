@@ -1,58 +1,73 @@
 #include <Arduino.h>
 #include "../../util/utils.h"
 
-static double bottomlink_startAngle = 103.3;
-static double bottomlink_l1 = 52.5;
-static double bottomlink_l2 = 10;
-// static double bottomlink_x0 = bottomlink_l1 * cos(DegreeToR(bottomlink_startAngle)) + 30;  // 30
-static double bottomlink_x0 = 12.5;
-// static double bottomlink_y0 = bottomlink_l1 * sin(DegreeToR(bottomlink_startAngle)) - bottomlink_l2 - 1;
-static double bottomlink_y0 = bottomlink_l1 * sin(DegreeToR(bottomlink_startAngle)) - bottomlink_l2 + 1;
+void intersection_of_two_circles(float res[], float c1_x, float c1_y, float c1_r, float c2_x, float c2_y, float c2_r){
+    float R = sqrt((c1_x - c2_x) * (c1_x - c2_x) + (c1_y - c2_y) * (c1_y - c2_y));
 
-static double toplink_startAngle = 101.5                                                                                                      ;
-static double toplink_l1 = 53.5;
-static double toplink_l2 = 10;
-//static double toplink_x0 = toplink_l1 * cos(DegreeToR(toplink_startAngle)) + 30;
-static double toplink_x0 = 13;
-static double toplink_y0 = toplink_l1 * sin(DegreeToR(toplink_startAngle)) + toplink_l2 - 2;
+    // This solution is one of two, the first point is an extraneous solution
+    float x2 = 0.5 * (c1_x + c2_x) + (c1_r * c1_r - c2_r * c2_r)/(2 * R * R) * (c2_x - c1_x) - 0.5 * sqrt(2 * (c1_r * c1_r + c2_r * c2_r)/(R*R) - pow((c1_r*c1_r - c2_r*c2_r), 2)/(R * R * R * R) - 1) * (c2_y - c1_y);
+    float y2 = 0.5 * (c1_y + c2_y) + (c1_r * c1_r - c2_r * c2_r)/(2 * R * R) * (c2_y - c1_y) - 0.5 * sqrt(2 * (c1_r * c1_r + c2_r * c2_r)/(R*R) - pow((c1_r*c1_r - c2_r*c2_r), 2)/(R * R * R * R) - 1) * (c1_x - c2_x);
 
-
-// 3 bar problem
-// 1. Long arm length is l1.  Fixed end is at (0, 0) and moveing end starts at (l1*cos(startAngle), l1*Sin(startAngle))
-// 2. short arm length is l2.  Fixed end is at (x0, y0) moving end starts at (x0, y0+l2)
-double linkage(double rocketAngle)
-{
-  double retVal = 0;
-  double d2 = pow(bottomlink_x0 - bottomlink_l1 * cos(DegreeToR(bottomlink_startAngle)), 2)
-              + pow(bottomlink_y0 + bottomlink_l2 - bottomlink_l1 * sin(DegreeToR(bottomlink_startAngle)), 2);
-
-  double a1 = bottomlink_l1 * cos(DegreeToR(rocketAngle)) - bottomlink_x0;
-  double b1 = bottomlink_l1 * sin(DegreeToR(rocketAngle)) - bottomlink_y0;
-  double a12plusb12 = pow(a1, 2) + pow(b1, 2);
-  double angle1 = atan(b1 / a1);
-  double angle2 = acos((-a12plusb12 - pow(bottomlink_l2, 2) + d2) / (2 * bottomlink_l2 * sqrt(a12plusb12)));
-
-  retVal = atan(b1 / a1) + acos((-a12plusb12 - pow(bottomlink_l2, 2) + d2) / (2 * bottomlink_l2 * sqrt(a12plusb12)));
-
-  return RToDegree(retVal);
+    res[0] = x2;
+    res[1] = y2;
 }
 
-// 3 bar problem
-// 1. Long arm length is l1.  Fixed end is at (0, 0) and moveing end starts at (l1*cos(startAngle), l1*Sin(startAngle))
-// 2. short arm length is l2.  Fixed end is at (x0, y0) moving end starts at (x0, y0-l2)
-double linkage2(double rocketAngle)
-{
-  double retVal = 0;
-  double d2 = pow(toplink_x0 - toplink_l1 * cos(DegreeToR(toplink_startAngle)), 2)
-              + pow(toplink_y0 - toplink_l2 - toplink_l1 * sin(DegreeToR(toplink_startAngle)), 2);
+// All of the following terms are in centimeters
+float gimbal_hole_to_pivot_distance = 4.2;
+float sy_x = -2.55;
+float sy_y = 2.9;
 
-  double a1 = toplink_l1 * cos(DegreeToR(rocketAngle)) - toplink_x0;
-  double b1 = toplink_l1 * sin(DegreeToR(rocketAngle)) - toplink_y0;
-  double a12plusb12 = pow(a1, 2) + pow(b1, 2);
-  double angle1 = atan(b1 / a1);
-  double angle2 = acos((-a12plusb12 - pow(toplink_l2, 2) + d2) / (2. * toplink_l2 * sqrt(a12plusb12)));
+float sx_x = -2.8;
+float sx_y = 2.9;
 
-  retVal = atan(b1 / a1) - acos((-a12plusb12 - pow(toplink_l2, 2) + d2) / (2. * toplink_l2 * sqrt(a12plusb12)));
+float servo_hole_distance = 1.1;
+float linkage_length = 2.8;
 
-  return RToDegree(retVal);
+float gimbalYawAngle(float angle){
+  angle *= PI / 180;
+
+  float px = gimbal_hole_to_pivot_distance * sin(angle);
+  float py = gimbal_hole_to_pivot_distance * cos(angle);
+
+  float res[2];
+  intersection_of_two_circles(res, sx_x, sx_y, servo_hole_distance, px, py, linkage_length);
+
+  float x = res[0] - sx_x;
+  float y = res[1] - sx_y;
+
+  /*SerialUSB.println("YAW INFO");
+
+  SerialUSB.print(res[0]);
+  SerialUSB.print(" ");
+  SerialUSB.println(res[1]);
+
+  SerialUSB.println(atan(x / y) * 180 / PI);
+  SerialUSB.println("YAW");*/
+
+  return atan(x / y) * 180 / PI;
+}
+
+float gimbalPitchAngle(float angle){
+  angle *= PI / 180;
+
+  float px = gimbal_hole_to_pivot_distance * sin(angle);
+  float py = gimbal_hole_to_pivot_distance * cos(angle);
+
+  float res[2];
+  intersection_of_two_circles(res, sy_x, sy_y, servo_hole_distance, px, py, linkage_length);
+
+  float x = res[0] - sy_x;
+  float y = res[1] - sy_y;
+
+  /*
+  SerialUSB.println("PITCH INFO");
+
+  SerialUSB.print(res[0]);
+  SerialUSB.print(" ");
+  SerialUSB.println(res[1]);
+
+  SerialUSB.println(atan(x / y) * 180 / PI);
+  SerialUSB.println("PITCH2.8");*/
+
+  return atan(x / y) * 180 / PI;
 }

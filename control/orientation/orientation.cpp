@@ -47,9 +47,9 @@ void Orientation::updateOrientation(float gx, float gy, float gz, float ax, floa
 
   Quaternion4 n(
     0,
-    -acceleration.c,
-    acceleration.b,
-    0
+    0,
+    -acceleration.d,
+    acceleration.c
   );
 
   n.normalize_();
@@ -76,28 +76,36 @@ void Orientation::updateYPR(){
   yaw = atan2(2 * (quaternion.a * quaternion.b + quaternion.c * quaternion.d), 1 - 2 * (quaternion.b * quaternion.b + quaternion.c * quaternion.c)) * 180 / PI;
   pitch = asin(2 * (quaternion.a * quaternion.c - quaternion.d * quaternion.b)) * 180 / PI;
 
-  // for guidance we want yaw -> pitch -> roll representation
-
-  /*float m23 = 2 * (quaternion.c * quaternion.d - quaternion.a * quaternion.b);
-  float m11 = (quaternion.a * quaternion.a + quaternion.b * quaternion.b - quaternion.c * quaternion.c - quaternion.d * quaternion.d);
   float m31 = 2 * (quaternion.b * quaternion.d - quaternion.a * quaternion.c);
+  float m11 = (quaternion.a * quaternion.a + quaternion.b * quaternion.b - quaternion.c * quaternion.c - quaternion.d * quaternion.d);
   float m21 = 2 * (quaternion.b * quaternion.c + quaternion.a * quaternion.d);
-  float m22 = (quaternion.a * quaternion.a - quaternion.b * quaternion.b + quaternion.c * quaternion.c - quaternion.d * quaternion.d);*/
+  float m23 = 2 * (quaternion.c * quaternion.d - quaternion.a * quaternion.b);
+  float m22 = (quaternion.a * quaternion.a - quaternion.b * quaternion.b + quaternion.c * quaternion.c - quaternion.d * quaternion.d);
 
-  /*float m23 = -sin(roll) * cos(yaw);
-  float m11 = cos(yaw) * cos(pitch);
-  float m31 = -cos(roll) * sin(yaw) * cos(pitch) + sin(roll) * sin(pitch);
-  float m21 = sin(roll) * sin(yaw) * cos(pitch) + cos(roll) * sin(pitch);
-  float m22 = -sin(roll) * sin(yaw) * sin(pitch) + cos(roll) * cos(pitch);
-
-  
-  yaw = atan2(-m31,  m11) * 180 / PI;
-  pitch = atan2(m21, sqrt(1 - (m21 * m21)))  * 180 / PI;
-  roll = atan2(-m23, m22) * 180 / PI;*/
+  yaw = atan2(-m31, m11) * 180 / PI;
+  pitch = atan2(m21, sqrt(1 - m21 * m21)) * 180 / PI;
+  roll = atan2(-m23, m22) * 180 / PI;
 
   yaw = round(yaw * 10) / 10.;
   pitch = round(pitch * 10) / 10.;
   roll = round(roll * 10) / 10.;
+}
+
+void YZXtoXYZ(float xyz[], float y, float z, float x){
+  // Just some renaming and conversion for easier typing
+  float one = y * PI / 180;
+  float two = z * PI / 180;
+  float three = x * PI / 180;
+
+  float m23 = -cos(two) * sin(three);
+  float m33 = -sin(one) * sin(two) * sin(three) + cos(one) * cos(three);
+  float m13 = cos(one) * sin(two) * sin(three) + sin(one) * cos(three);
+  float m12 = -cos(one) * sin(two) * cos(three) + sin(one) * sin(three);
+  float m11 = cos(one) * cos(two);
+
+  xyz[0] = atan2(-m23, m33) * 180 / PI;
+  xyz[1] = atan2(m13, sqrt(1 - m13 * m13)) * 180 / PI;
+  xyz[2] = atan2(-m12, m11) * 180 / PI;
 }
 
 #endif

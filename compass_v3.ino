@@ -51,11 +51,20 @@ float yD = 0.27;
 */
 
 float yP = 0.13;
-float yI = 0.1;
+float yI = 0.;
 float yD = 0.07;
 
+// p and yIntegral are the integrals of roll-independent orientation. 
+// They will be rotated into the body frame before being fed into the PID controller
+float yIntegral = 0;
+
 float yAngle = 0;
-float yOffset = 0;
+
+// Black gimbal
+//float yOffset = 5;
+
+// Grey gimbal
+float yOffset = -10;
 
 // PID controller for yaw
 PIDController yawController(yP, yI, yD, 0);
@@ -69,11 +78,18 @@ float pD = 0.27;
 */
 
 float pP = 0.13;
-float pI = 0.1;
+float pI = 0.;
 float pD = 0.07;
 
+float pIntegral = 0;
+
 float pAngle = 0;
-float pOffset = 0;
+
+// Black gimbal
+// float pOffset = -4;
+
+// Grey gimbal
+float pOffset = -15;
 
 PIDController pitchController(pP, pI, pD, 0);
 
@@ -128,6 +144,8 @@ Pyro PYRO_3(PYRO_THREE);
 Servo yawServo;
 Servo pitchServo;
 
+int flightStartCounter = 0;
+
 void setup() {
   Serial1.begin(9600);      // Begin Bluetooth serial comm
   SerialUSB.begin(9600);   // Begin USB debugging serial comm
@@ -148,9 +166,9 @@ void setup() {
   pinMode(BLUE_LED, OUTPUT);   
   pinMode(RED_LED, OUTPUT);
 
-  digitalWrite(RED_LED, LOW);
+  digitalWrite(RED_LED, HIGH);
   digitalWrite(GREEN_LED, HIGH);
-  digitalWrite(BLUE_LED, HIGH);
+  digitalWrite(BLUE_LED, LOW);
 
   pinMode(A3, OUTPUT);           // Servo enable pin. This is a way of stopping servo use when Zenith's switch is turned off, so we don't need a high amperage switch
   
@@ -161,14 +179,24 @@ void setup() {
   yawServo.attach(4);
   pitchServo.attach(3);
 
-  // Perform tests
-  //circleFreedomTest(yawServo, pitchServo);
   delay(100);
-  yawServo.write(90);
-  pitchServo.write(90);
-  delay(100);
-  //crossFreedomTest(yawServo, pitchServo);
+  // Lock at true-servo-neutral for debugging purposes 
+  writeYawServo(90);
+  writePitchServo(90);
   delay(1000);
+
+  // Change color to red for initialization stage
+  // TODO: Make a method for this lol
+  digitalWrite(RED_LED, LOW);
+  digitalWrite(GREEN_LED, HIGH);
+  digitalWrite(BLUE_LED, HIGH);
+
+  // Perform tests
+  circleFreedomTest(yawServo, pitchServo);
+  delay(100);
+
+  gimbalYawServo(0);
+  gimbalPitchServo(0);
 
   /*for (int i = 0; i < 1000; i++){
     smallAngleTest(yawServo, pitchServo);
@@ -198,6 +226,8 @@ void setup() {
 
   SerialUSB.println(configs[0]);
   SerialUSB.println(configs[1]);
+
+  /*
   SerialUSB.println("OFFSETS");
 
   if (configs[0] != 0xff){
@@ -215,7 +245,7 @@ void setup() {
 
   if (abs(pOffset) > 5){
     pOffset = 0;
-  }
+  }*/
 
   SerialUSB.print("Slot ");
   SerialUSB.print(launchSlot);
@@ -400,20 +430,20 @@ void loop() {
       if (command.startsWith("INC_YAW")){
         String incrementAmountString = command.substring(8);
         float incrementAmount = incrementAmountString.toFloat();
-        yOffset += incrementAmount;
+        //yOffset += incrementAmount;
 
         gimbalYawServo(0);
       } else if (command.startsWith("INC_PITCH")){
         String incrementAmountString = command.substring(10);
         float incrementAmount = incrementAmountString.toFloat();
-        pOffset += incrementAmount;
+        //pOffset += incrementAmount;
 
         gimbalPitchServo(0);
       } else if (command.equals("SAVE_OFFSETS")){
         SerialUSB.println("SAVING OFFSETS");
-        uint8_t newOffsets[2] = {(int) clip(yOffset * 10 + 255, 0, 255), (int) clip(pOffset * 10 + 255, 0, 255)};
-        uint8_t addresses[2]  = {0x00, 0x01};
-        editConfigs(FLASH, 28, newOffsets, addresses, 2);
+        //uint8_t newOffsets[2] = {(int) clip(yOffset * 10 + 255, 0, 255), (int) clip(pOffset * 10 + 255, 0, 255)};
+        //uint8_t addresses[2]  = {0x00, 0x01};
+        //editConfigs(FLASH, 28, newOffsets, addresses, 2);
       }
 
       if (command.startsWith("LED")) {
@@ -580,9 +610,25 @@ void loop() {
 
     // updateOrientation(gx, gz, gy, az, ay, ax, elapsedTime, 0.1);
     if (STAGE_FLAG == FLIGHT){
-      orientation.updateOrientation(-gz, gy, gx, az, -ay, -ax, elapsedTime, 0.0);   // Don't fuse accelerometer data
+      //orientation.updateOrientation(-gz, gy, gx, az, -ay, -ax, elapsedTime, 0.0);   // Don't fuse accelerometer data
+
+      // THIS LINE BELOW IS THE CORRECT ONE FOR REAL FLIGHT
+      orientation.updateOrientation(gx, gy, gz, 0, 0, 0, elapsedTime, 0.0);
+
+      /*
+      Orientation test bloc, if you want to make a scenario to check behavior, edit it here
+
+      if (c - flightStartCounter < 100){
+        orientation.updateOrientation(0, 0, 10, 0, 0, 0, elapsedTime, 0.0);
+      }else if (c - flightStartCounter < 200){
+       //orientation.updateOrientation(0, 0, -10, 0, 0, 0, elapsedTime, 0.0);
+      }else{
+        orientation.updateOrientation(100, 0, 0, 0, 0, 0, elapsedTime, 0.0);
+      }
+      */
+
     }else{
-      orientation.updateOrientation(-gz, gy, gx, az, -ay, -ax, elapsedTime, 0.02);
+       orientation.updateOrientation(gx, gy, gz, -ax, -ay, -az, elapsedTime, 0.06);
     }
 
     orientation.updateYPR();
@@ -593,46 +639,41 @@ void loop() {
   if (c % 3 == 0) {
     // Only vector if we're in the flight stage, or if we're testing vectoring, and ensure that we aren't currently in bluetooth test mode
     if ((STAGE_FLAG == FLIGHT or VECTORING_TEST_FLAG) && !BLE_TEST_MODE) {
+      // Integrate
+      pIntegral += orientation.pitch * 0.06;
+      yIntegral += orientation.yaw * 0.06;
 
-      pAngle = pitchController.step(orientation.pitch, avg_gy / 3.);
+      // Rotate the p and yIntegral into body frame
+      // Construct an YZX euler angle set of [pIntegral, yIntegral, orientation.roll]
+      // Convert it into XYZ euler angles and extract just pIntegral' and yIntegral'
+      // TODO: CHECK XYZtoXYZ TEST
+      float xyzIntegral[3];
+
+      YZXtoXYZ(xyzIntegral, yIntegral, pIntegral, orientation.roll);
+
+      float xyzOrientation[3];
+
+      YZXtoXYZ(xyzOrientation, orientation.yaw, orientation.pitch, orientation.roll);
+
+      pAngle = pitchController.step(xyzOrientation[1], xyzIntegral[1], avg_gy / 3.);
       avg_gy = 0;
 
       // Convert the gimbal angle to a direct servo angle
 
-      yAngle = yawController.step(orientation.yaw, -avg_gz / 3.);
+      yAngle = yawController.step(xyzOrientation[2], xyzIntegral[2], avg_gz / 3.);
       avg_gz = 0;
 
-      // Place pAngle and yAngle in yaw-pitch-roll 
-      // Then convert into roll-yaw-pitch
-      // theta1 = yaw
-      // theta2 = pitch 
-      // theta3 =
-      /*
-      pAngle = -pAngle;
-      yAngle = -yAngle;
-
-      pAngle = clip(pAngle, -30, 30);
-      yAngle = clip(yAngle, -30, 30);
-      
-      float m13 = cos(yAngle * PI / 180.) * sin(pAngle * PI / 180.) * sin(orientation.roll * PI / 180.) + sin(yAngle * PI / 180.) * cos(orientation.roll * PI / 180.);
-      float m12 = -cos(yAngle * PI / 180.) * sin(pAngle * PI / 180.) * cos(orientation.roll * PI / 180.) + sin(yAngle * PI / 180.) * sin(orientation.roll * PI / 180.);
-      float m11 =cos(yAngle * PI / 180.) * cos(pAngle * PI / 180.);
-
-      pAngle = atan2(m13, sqrt(1 - m13 * m13)) * 180. / PI;
-      yAngle = atan2(-m12, m11) * 180. / PI;
-      */
-
       // Find angle with largest magnitude, this is the one we want to shrink
-      float biggestAngle = max(abs(pAngle), abs(yAngle));
+      float biggestAngle = max(abs(pAngle),abs(yAngle));
 
       // Find ratio, and proportionally shrink yaw and pitch so that they're within 8 degrees while maintaining (approximately) the direction as well
-      if (biggestAngle > 8){
-        float ratio = abs(8. / biggestAngle);
+      if (biggestAngle > 6){
+        float ratio = 6. / biggestAngle;
         pAngle *= ratio;
         yAngle *= ratio;
       }
 
-      gimbalYawServo(-yAngle);
+      gimbalYawServo( -yAngle);
       gimbalPitchServo(-pAngle);
     }
   }
@@ -656,7 +697,7 @@ void loop() {
   }
 
   if (c % 1 == 0) {
-    
+    /*
     SerialUSB.print(ax);
     SerialUSB.print(" ");
     SerialUSB.print(ay);
@@ -671,7 +712,7 @@ void loop() {
     SerialUSB.print(" ");
     SerialUSB.print(gz);
     SerialUSB.print("   ");
-
+    */
     SerialUSB.print(orientation.yaw);
     SerialUSB.print(" ");
     SerialUSB.print(orientation.pitch);
@@ -679,6 +720,17 @@ void loop() {
     SerialUSB.print(orientation.roll);
     SerialUSB.print("   ");
 
+     float xyzOrientation[3];
+
+      YZXtoXYZ(xyzOrientation, orientation.yaw, orientation.pitch, orientation.roll);
+    
+    SerialUSB.print(xyzOrientation[1]);
+    SerialUSB.print(" ");
+    SerialUSB.print(xyzOrientation[2]);
+    SerialUSB.print(" ");
+    SerialUSB.print(xyzOrientation[0]);
+    SerialUSB.print("   ");
+    
     SerialUSB.print(-pAngle);
     SerialUSB.print(" ");
     SerialUSB.print(yAngle);
@@ -686,7 +738,7 @@ void loop() {
 
     SerialUSB.print(elapsedTime);
     SerialUSB.print(" ");
-
+    
     SerialUSB.println("");
   }
 
@@ -711,7 +763,7 @@ void loop() {
 }
 
 /* HELPER FUNCTIONS */
-static inline void writeToServo(Servo servo, int angle, bool output) {
+static inline void writeToServo(Servo servo, int angle, int offset, bool output = false) {
   if (!ENABLE_VECTORING) {
     return;
   }
@@ -720,20 +772,8 @@ static inline void writeToServo(Servo servo, int angle, bool output) {
     SerialUSB.print(angle);
     SerialUSB.print(" ");
   }
-  servo.write(angle);
+  servo.write(angle + offset);
   // servo.detach();
-}
-
-void gimbalYawServo(float gimbalAngle){
-  float yServoAngle = linkage2(toplink_startAngle + gimbalAngle + yOffset) + 180;
-
-  writeToServo(yawServo, yServoAngle, false);
-}
-
-void gimbalPitchServo(float gimbalAngle){
-  float pServoAngle = linkage(bottomlink_startAngle + gimbalAngle + pOffset);
-
-  writeToServo(pitchServo, pServoAngle, false);
 }
 
 void pyro_check(){
@@ -784,6 +824,22 @@ String BLEGenerateOrientationPayload(int part) {
   return payload;
 }
 
+void gimbalYawServo(float angle){
+  writeToServo(yawServo, -gimbalYawAngle(angle) + 90, yOffset);
+} 
+
+void writeYawServo(float rawAngle){
+  writeToServo(yawServo, rawAngle, yOffset);
+}
+
+void gimbalPitchServo(float angle){
+  writeToServo(pitchServo, -gimbalPitchAngle(angle) + 90, pOffset);
+}
+
+void writePitchServo(float rawAngle){
+  writeToServo(pitchServo, rawAngle, pOffset);
+}
+
 void setPadIdleMode(){
   STAGE_FLAG = PAD_IDLE;
   resetLED();
@@ -792,8 +848,16 @@ void setPadIdleMode(){
 void setFlightMode(){
   STAGE_FLAG = FLIGHT;
 
+  // Null out roll right before flight starts
+  // float roll = orientation.roll;
+  // orientation.updateOrientation(-roll, 0, 0, 0, 0, 0, 1000, 0.0);
+
+  SerialUSB.println("FLIGHT STARTED");
+
   yawController.start();
   pitchController.start();
+
+  flightStartCounter = c;
 
   resetLED();
 }

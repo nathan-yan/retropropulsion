@@ -45,7 +45,7 @@ class PIDController{
             this->D = D;
         }
 
-        float step(float measurement, float derivative);
+        float step(float measurement, float i_error, float d_error);
 };
 
 void PIDController::start(){
@@ -58,7 +58,7 @@ void PIDController::reset(){
     previous_d_error = 0;
 }
 
-float PIDController::step(float measurement, float d_error){
+float PIDController::step(float measurement, float i_error, float d_error){
     int time = millis();
     
     float dt = (time - this->time) / 1000.;
@@ -66,57 +66,9 @@ float PIDController::step(float measurement, float d_error){
 
     float error = measurement - setpoint;
     
-    // d_error is in degrees per second.
-    //float d_error = ((error - previous_error) / dt) * 0.8 + previous_d_error * 0.2;     // A weighted average between current derivative and previous derivative to prevent sudden changes jerking the mount
-
-    //float d_error = derivative;       // Degrees per second
-
-    // Integrate error over dt
-    previous_integral += error * dt;
-
     float proportional = P * error;
-    float integral = I * previous_integral; 
+    float integral = I * i_error; 
     float derivative = D * d_error;
-
-    //if (derivative < 1.5 && derivative > -1.5){
-    //    derivative = 0;
-    //}
-
-    previous_error = error;
-    previous_d_error = d_error;
 
     return proportional + integral + derivative;
 }
-
-/*
-float* pidLoop(float p, float i, float d,
-               float measurement, float setpoint,
-               float previous_error, float previous_integral, float previous_d_error,
-               float dt){
-    
-    float error = measurement - setpoint;
-    float d_error = (((error - previous_error) / dt) * 0.8 + previous_d_error * 0.2);
-
-     //float d_error = (((error - previous_error) / dt));
-
-    // Integrate the error over the time difference
-    previous_integral += error * dt;
-
-    float proportional = p * error;
-    float integral = i * previous_integral;
-    float derivative = d * d_error;
-
-    if (derivative < 1.5 && derivative > -1.5){
-        derivative = 0;
-    }
-
-    // if (proportional + integral + derivative > 6 || proportional)
-
-    float * state = new float[4]; 
-    state[0] = proportional + integral + derivative;
-    state[1] = error;
-    state[2] = previous_integral;
-    state[3] = d_error;
-
-    return state;
-}*/
