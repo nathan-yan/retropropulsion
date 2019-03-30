@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "../compass_v3.h"
+#include "../retro_v1.h"
 
 void circleFreedomTest(Servo yaw, Servo pitch){
     for (int degree = 0; degree < 360; degree++){
